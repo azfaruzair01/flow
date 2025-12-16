@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transaction Timeline (Final)</title>
+  
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    /* Dark Mode Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0d1117; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    
+    /* Timeline Connector Line */
+    .step-connector { position: absolute; left: 1.65rem; top: 2.5rem; bottom: -1rem; width: 2px; background: #30363d; z-index: 0; }
+    .step-item:last-child .step-connector { display: none; }
+    
+    /* Code block background */
+    .code-bg { background-color: #0d1117; }
+  </style>
+</head>
+<body class="bg-[#0d1117] h-screen overflow-hidden font-sans text-gray-300">
+
+<div id="app" class="flex flex-col h-full">
+
+  <header class="bg-[#161b22] border-b border-[#30363d] px-6 py-4 shrink-0 shadow-sm z-20">
+    <div class="flex justify-between items-center max-w-full">
+      
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center gap-3">
+          <h1 class="text-xl font-bold text-white tracking-tight">
+            Transaction #{{ store.transactionId }}
+          </h1>
+          
+          <div class="badge border-0 font-bold px-3 py-3" :class="statusBadge.class">
+            {{ statusBadge.text }}
+          </div>
+        </div>
+        
+        <div class="text-xs text-gray-500 font-mono flex items-center gap-2">
+          Initiated: <span class="text-gray-400">{{ formatTime(store.rawSteps[0]?.timestamp) || 'N/A' }}</span>
+        </div>
+      </div>
+
+      <div class="flex gap-4">
+        <div class="flex flex-col items-center px-4 py-2 rounded-md bg-[#21262d] border border-[#30363d] min-w-[120px]">
+          <span class="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Total Duration</span>
+          <span class="text-lg font-bold text-white font-mono leading-tight">{{ store.totalDuration }}</span>
+        </div>
+        <div class="flex flex-col items-center px-4 py-2 rounded-md bg-[#21262d] border border-[#30363d] min-w-[80px]">
+          <span class="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Steps</span>
+          <span class="text-lg font-bold text-white font-mono leading-tight">{{ store.rawSteps.length }}</span>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+    
+    <aside class="w-[450px] bg-[#0d1117] border-r border-[#30363d] overflow-y-auto p-4 flex flex-col gap-2 relative z-10">
+      
+      <div 
+        v-for="(step, index) in store.rawSteps" 
+        :key="step.step" 
+        @click="selectStep(step)"
+        class="card card-compact border cursor-pointer transition-all duration-200 mb-2 hover:border-blue-500/50 step-item relative"
+        :class="[
+          selectedStep?.step === step.step ? 'bg-blue-500/10 border-blue-500/50' : 'bg-[#161b22] border-[#30363d]',
+          step.state === 'FAILED' ? 'border-red-500/50 bg-red-900/10' : ''
+        ]"
+      >
+        
+        <div class="step-connector"></div>
+
+        <div class="card-body flex-row items-center gap-3 py-3 px-4 z-10">
+          <div class="flex items-center justify-center w-7 h-7 rounded-full shrink-0 text-xs font-bold border-2"
+            :class="{
+              'border-green-500/30 bg-green-500/10 text-green-400': ['SUCCESS', 'PAYMENT_COMPLETE_SUCCESS'].includes(step.state),
+              'border-red-500/30 bg-red-500/10 text-red-400': step.state === 'FAILED',
+              'border-gray-600 bg-[#21262d] text-gray-400': step.state === 'RECEIVED'
+            }">
+            <span v-if="['SUCCESS', 'PAYMENT_COMPLETE_SUCCESS'].includes(step.state)">✓</span>
+            <span v-else-if="step.state === 'FAILED'">!</span>
+            <span v-else>●</span>
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate" :class="step.state === 'FAILED' ? 'text-red-400' : 'text-gray-200'">
+              {{ step.stepName || 'Unknown Step' }}
+            </div>
+            <div class="text-xs text-gray-500 font-mono mt-0.5">
+              {{ formatTime(step.timestamp) || 'Mesh Event' }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <main class="flex-1 bg-[#010409] flex flex-col min-w-0 relative">
+      <div v-if="selectedStep" class="flex flex-col h-full">
+        
+        <div class="p-6 border-b border-[#30363d] flex justify-between items-start bg-[#0d1117]">
+          <div>
+            <h2 class="text-lg font-bold text-gray-100">{{ selectedStep.stepName }}</h2>
+            <div class="text-xs text-gray-500 mt-1 font-mono">Service: {{ selectedStep.serviceName }}</div>
+          </div>
+          <div class="badge font-bold border-0" 
+            :class="{
+              'bg-green-500/10 text-green-400': ['SUCCESS', 'PAYMENT_COMPLETE_SUCCESS'].includes(selectedStep.state),
+              'bg-red-500/10 text-red-400': selectedStep.state === 'FAILED',
+              'bg-gray-700 text-gray-400': selectedStep.state === 'RECEIVED'
+            }">
+            {{ selectedStep.state }}
+          </div>
+        </div>
+
+        <div role="tablist" class="tabs tabs-bordered w-full px-4 pt-2 bg-[#0d1117] border-b border-[#30363d]">
+          <a role="tab" class="tab h-10 text-gray-400" :class="{ 'tab-active !border-blue-500 !text-white': currentTab === 'Payload' }" @click="currentTab = 'Payload'">Payload</a>
+          <a role="tab" class="tab h-10 text-gray-400" :class="{ 'tab-active !border-blue-500 !text-white': currentTab === 'Headers' }" @click="currentTab = 'Headers'">Headers</a>
+          <a role="tab" class="tab h-10 text-gray-400" :class="{ 'tab-active !border-blue-500 !text-white': currentTab === 'Metadata' }" @click="currentTab = 'Metadata'">Metadata</a>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 bg-[#010409]">
+          
+          <div v-if="currentTab === 'Payload'" class="space-y-6">
+            <div v-if="selectedStep.payload && selectedStep.payload.length > 0">
+              <div v-for="(p, idx) in selectedStep.payload" :key="idx" class="border border-[#30363d] rounded-md bg-[#0d1117] overflow-hidden">
+                <div class="bg-[#161b22] px-4 py-2 flex justify-between items-center border-b border-[#30363d]">
+                  <span class="text-xs font-bold text-blue-400 uppercase tracking-wider">{{ p.label }}</span>
+                  <span class="text-[10px] bg-[#30363d] text-gray-300 px-2 py-0.5 rounded">{{ p.size }} bytes</span>
+                </div>
+                <div class="p-0 overflow-x-auto">
+                   <pre v-if="p.data" class="text-xs text-gray-300 p-4 font-mono leading-relaxed"><code>{{ JSON.stringify(p.data, null, 2) }}</code></pre>
+                   <div v-else>
+                      <div class="px-4 pt-2 text-yellow-500/70 text-xs italic font-mono">// Data not captured</div>
+                      <pre class="text-xs text-gray-300 p-4 font-mono leading-relaxed"><code>{{ JSON.stringify(p.metadata, null, 2) }}</code></pre>
+                   </div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="alert bg-[#161b22] border-[#30363d] text-sm text-gray-400">
+              <span>No payload captured for this step (Mesh Event)</span>
+            </div>
+          </div>
+
+          <div v-if="currentTab === 'Headers'">
+            <div v-if="selectedStep.headerDelta" class="border border-[#30363d] rounded-md bg-[#0d1117] overflow-hidden">
+               <pre class="text-xs text-gray-300 p-4 font-mono leading-relaxed overflow-x-auto"><code>{{ JSON.stringify(selectedStep.headerDelta, null, 2) }}</code></pre>
+            </div>
+            <div v-else class="text-center py-10 opacity-50 text-sm text-gray-500">No Header Delta available</div>
+          </div>
+
+          <div v-if="currentTab === 'Metadata'">
+             <div class="grid grid-cols-1 gap-4 text-sm">
+                <div class="bg-[#161b22] p-4 rounded border border-[#30363d]">
+                  <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Sequence ID</div>
+                  <div class="text-lg font-mono text-white">{{ selectedStep.step }}</div>
+                </div>
+                <div class="bg-[#161b22] p-4 rounded border border-[#30363d]">
+                  <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Block Tags</div>
+                  <div class="text-base text-white">{{ selectedStep.blockTags?.join(', ') || '-' }}</div>
+                </div>
+                <div class="bg-[#161b22] p-4 rounded border border-[#30363d]">
+                  <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Detected Category</div>
+                  <div class="text-base text-white font-mono">{{ selectedStep.category }}</div>
+                </div>
+             </div>
+          </div>
+
+        </div>
+      </div>
+      
+      <div v-else class="flex flex-col items-center justify-center h-full text-gray-600">
+        <div class="text-4xl mb-4 opacity-50">👈</div>
+        <p>Select a transaction step</p>
+      </div>
+    </main>
+
+  </div>
+</div>
+
+<script>
+  const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+  // ==================================================================================
+  // [DATA] RAW MOCK DATA
+  // ==================================================================================
+  const rawData = {
+    "transactionId": "542196fe-1f62-4ec8-a6b7-78043fc6bc3b",
+    "steps": [
+      {
+        "step": 0, "timestamp": "2025-12-03T16:38:34.173Z", "state": "RECEIVED",
+        "stepName": "pol-sms-sync-async-gateway", "serviceName": "pol-sms-sync-async-gateway",
+        "sequence": "pol-sms-sync-async-gateway,pol-sms-initiator-service",
+        "blockTags": ["CONTINUE"],
+        "payload": [
+          { "label": "pol-sms-sync-async-gateway", "size": 1188, "data": { "headers": { "x-request-id": "5421..." }, "status-code": 200 } },
+          { "label": "REPORT_SAFESTORE", "size": 1213, "data": { "body": "Backup complete" } }
+        ]
+      },
+      { "step": 1, "stepName": "pol-sms-initiator-service-mesh", "serviceName": "pol-sms-initiator-service", "state": "SUCCESS", "blockTags": ["CONTINUE"] },
+      {
+        "step": 2, "timestamp": "2025-12-03T16:38:34.195Z", "state": "SUCCESS",
+        "stepName": "pol-sms-initiator-service", "serviceName": "pol-sms-initiator-service",
+        "payload": [{ "label": "REPORT_INITIATOR_RULE", "size": 192, "data": { "rule-id": "rule-txn-report" } }],
+        "headerDelta": { "InitialTimestamp": "2025-12-03T16:38:34.191" }
+      },
+      { "step": 3, "timestamp": "2025-12-03T16:38:34.210Z", "state": "SUCCESS", "stepName": "ledger-update-validation", "serviceName": "pol-ledger-service", "payload": [{ "label": "LEDGER_OP", "data": { "body": "Debit Created" } }] },
+      { "step": 4, "timestamp": "2025-12-03T16:38:34.225Z", "state": "SUCCESS", "stepName": "ledger-commit-entry", "serviceName": "pol-ledger-service", "payload": [{ "label": "LEDGER_COMMIT", "data": { "body": "Committed" } }] },
+      { "step": 5, "timestamp": "2025-12-03T16:38:34.500Z", "state": "PAYMENT_COMPLETE_SUCCESS", "stepName": "payment-completion-handler", "serviceName": "pol-payment-handler", "payload": [{ "label": "FINAL_RECEIPT", "data": { "status": "CONFIRMED" } }] }
+    ]
+  };
+
+  // ==================================================================================
+  // [APP] VUE LOGIC
+  // ==================================================================================
+  createApp({
+    setup() {
+      const selectedStep = ref(null);
+      const currentTab = ref('Payload');
+      
+      const store = reactive({
+        transactionId: rawData.transactionId,
+        rawSteps: [],
+        totalDuration: '0ms'
+      });
+
+      // 1. CATEGORY LOGIC (For Metadata display)
+      function deriveCategory(step, allSteps) {
+        const name = (step.stepName || '').toLowerCase();
+        const service = (step.serviceName || '').toLowerCase();
+        if (name.includes('initiator') || allSteps.indexOf(step) === 0) return 'INIT';
+        if (name.includes('ledger') || service.includes('ledger')) return 'LEDGER';
+        if (step.state === 'PAYMENT_COMPLETE_SUCCESS') return 'COMPLETED';
+        return 'CORE';
+      }
+
+      // 2. PROCESS DATA
+      function processData() {
+        store.rawSteps = rawData.steps.map(s => ({
+          ...s,
+          category: deriveCategory(s, rawData.steps)
+        }));
+
+        const validSteps = store.rawSteps
+          .filter(s => s.timestamp)
+          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        
+        if (validSteps.length >= 2) {
+          const start = new Date(validSteps[0].timestamp).getTime();
+          const end = new Date(validSteps[validSteps.length - 1].timestamp).getTime();
+          store.totalDuration = `${end - start}ms`;
+        }
+      }
+
+      // 3. STATUS BADGE LOGIC (Computed Tri-State)
+      const statusBadge = computed(() => {
+        if (!store.rawSteps.length) return { text: 'LOADING', class: 'bg-gray-800 text-gray-400' };
+        
+        const lastStepState = store.rawSteps[store.rawSteps.length - 1].state;
+
+        if (lastStepState === 'PAYMENT_COMPLETE_SUCCESS') {
+          return { text: 'COMPLETED', class: 'bg-green-500/10 text-green-400 ring-1 ring-green-500/50' };
+        }
+        if (lastStepState === 'PAYMENT_COMPLETE_FAILED' || lastStepState === 'FAILED') {
+          return { text: 'FAILED', class: 'bg-red-500/10 text-red-400 ring-1 ring-red-500/50' };
+        }
+        return { text: 'IN PROGRESS', class: 'bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/50' };
+      });
+
+      // 4. FORMATTERS
+      function selectStep(step) { selectedStep.value = step; currentTab.value = 'Payload'; }
+      
+      function formatTime(iso) { 
+        if (!iso) return ''; 
+        const d = new Date(iso); 
+        // Shows "Dec 03, 16:38:34.173"
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + 
+               d.toLocaleTimeString([], { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit' }) + 
+               '.' + d.getMilliseconds();
+      }
+
+      // 5. INIT
+      onMounted(() => {
+        processData();
+        if (store.rawSteps.length > 0) selectedStep.value = store.rawSteps[0];
+      });
+
+      return { store, selectedStep, currentTab, statusBadge, selectStep, formatTime };
+    }
+  }).mount('#app');
+</script>
+
+</body>
+</html>
