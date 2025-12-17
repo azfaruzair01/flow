@@ -9,25 +9,30 @@ export class PaymentFlowClient {
     this.restClient = restClient;
   }
 
-  // Exact pattern from EventClient: uses getUrl() to handle the path
   public async getPaymentFlow(transactionId: string): Promise<PaymentFlowDto> {
+    // Debug Log: Check your console to see exactly what URL is being requested
+    const url = this.restClient.getBaseUrl() + this.getUrl(transactionId);
+    console.log("[PaymentClient] Fetching:", url); 
+
     return await this.restClient.api
-      .get<PaymentFlowDto>(this.restClient.getBaseUrl() + this.getUrl(transactionId))
+      .get<PaymentFlowDto>(url)
       .json<PaymentFlowDto>();
   }
 
-  // Helper to switch between Mock JSON file and Real API endpoint
   private getUrl(transactionId: string): string {
-    if (import.meta.env.MODE === "json") {
-      // In 'json' mode, this looks for a file in your public folder:
-      // public/payment/542196fe-1f62-4ec8-a6b7-78043fc6bc3b.json
-      return "payment/" + transactionId + ".json";
+    // CHECK: likely your mode is "development", not "json"
+    // We add "development" here so it works during standard 'npm run dev'
+    if (import.meta.env.MODE === "json" || import.meta.env.MODE === "development") {
+      
+      // Force usage of the public folder structure
+      // Ensure we don't double-slash if base url ends in /
+      return `payment/${transactionId}.json`;
     } else {
-      // In production/remote mode, this hits the real backend endpoint
-      return "process-state/" + transactionId;
+      // Production / Real API endpoint
+      return `process-state/${transactionId}`;
     }
   }
 }
 
-// FIX: Added 'environment' to match EventClient's pattern
+// Ensure 'environment' is passed if your RestClient depends on it for base URL setup
 export const paymentFlowClient: PaymentFlowClient = new PaymentFlowClient(new RestClient(['environment', 'payment']));
