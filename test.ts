@@ -1,35 +1,37 @@
-import { RestClient } from '@/scripts/rest/RestClient';
-import type { PaymentFlowDto } from '@/scripts/type/payment/PaymentFlowDto';
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import { paymentFlowClient } from '@/scripts/rest/PaymentFlowClient';
+import type { PaymentStepDto } from '@/scripts/type/payment/PaymentFlowDto';
 
-class PaymentFlowClient {
-  private restClient: RestClient;
+export const usePaymentFlowStore = defineStore('payment-flow', () => {
+  const loading = ref<boolean>(false);
+  const error = ref<string | null>(null);
+  const transactionId = ref<string>('');
+  const rawSteps = ref<PaymentStepDto[]>([]);
 
-  constructor(restClient: RestClient) {
-    this.restClient = restClient;
-  }
+  // Getters (Duration, Status) remain the same...
 
-  async getFlow(transactionId: string): Promise<PaymentFlowDto> {
-    // This looks exactly like your ConfigMapClient logic:
-    // 1. Get the URL (either local JSON file or real API endpoint)
-    // 2. Perform the actual HTTP GET request
-    const url = this.getUrl(transactionId);
+  async function loadTransaction(id: string): Promise<void> {
+    loading.value = true;
+    error.value = null;
     
-    return await this.restClient.api
-      .get<PaymentFlowDto>(url)
-      .json<PaymentFlowDto>();
+    try {
+      // Now this actually triggers a network call (to local JSON or Real API)
+      const data = await paymentFlowClient.getFlow(id);
+      
+      transactionId.value = data.transactionId;
+      rawSteps.value = data.steps;
+    } catch (err: any) {
+      console.error("Payment Flow Error:", err);
+      error.value = err.message || 'Failed to load flow';
+    } finally {
+      loading.value = false;
+    }
   }
 
-  private getUrl(transactionId: string): string {
-    // Match your project's environment check style
-    if (import.meta.env.MODE === "json") {
-      // Points to public/mock/payment-flow/transaction-id.json
-      return `/mock/payment-flow/${transactionId}.json`;
-    } 
-    
-    // Real API Path
-    return `${this.restClient.getBaseUrl()}/process-state/${transactionId}`;
-  }
-}
-
-// Export singleton
-export const paymentFlowClient = new PaymentFlowClient(new RestClient(['payment']));
+  return {
+    loading, error, transactionId, rawSteps,
+    loadTransaction
+    // ... export getters
+  };
+});
