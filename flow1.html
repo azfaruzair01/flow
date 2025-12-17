@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payment Flow V15 (Inline Composite)</title>
+  <title>Payment Flow V16 (Vertical Layout)</title>
   
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -74,27 +74,28 @@
 
         <div class="grow pb-8 pt-0.5">
           
-          <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <div class="flex flex-col gap-1 mb-2">
             
             <h3 class="text-sm font-bold text-gray-100 leading-none">
               {{ step.stepName }}
             </h3>
 
-            <span v-if="step.state" class="font-mono text-[10px] uppercase tracking-wider flex items-center gap-2">
+            <div v-if="step.state" class="font-mono text-[10px] uppercase tracking-wider flex items-center gap-2">
               
               <span :class="getStateColor(step.state)" class="font-bold">
                 {{ step.state }}
               </span>
 
               <span v-if="step.outcome" class="flex items-center gap-2 text-gray-500">
-                <span class="w-px h-3 bg-gray-600"></span> <span class="text-gray-400">{{ step.outcome }}</span>
+                <span class="w-px h-3 bg-gray-600"></span>
+                <span class="text-gray-400">{{ step.outcome }}</span>
               </span>
 
-            </span>
+            </div>
 
           </div>
 
-          <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+          <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs">
             <button v-if="step.payload && step.payload.length" @click="openDrawer(step, 'Payload')" class="text-blue-400 hover:text-blue-300 hover:underline inline-flex items-center gap-1 transition-colors"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{{ step.payload.length }} Payloads</button>
             <button v-if="getHeaderCount(step) > 0" @click="openDrawer(step, 'Headers')" class="text-purple-400 hover:text-purple-300 hover:underline inline-flex items-center gap-1 transition-colors"><span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>+{{ getHeaderCount(step) }} Headers</button>
             <button v-if="step.parameters && Object.keys(step.parameters).length > 0" @click="openDrawer(step, 'Parameters')" class="text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1 transition-colors"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>{{ Object.keys(step.parameters).length }} Params</button>
@@ -184,21 +185,19 @@
         stepName: "pol-sms-sync-async-gateway", serviceName: "gateway", 
         payload: [{label: "INIT", size: 1200, data: {body: "init"}}] 
       },
-      // Example: Success with Outcome
       { 
         step: 2, timestamp: "2025-12-03T16:38:34.195Z", state: "SUCCESS", 
         stepName: "pol-sms-initiator-service", serviceName: "initiator",
-        outcome: "PAYMENT_COMPLETE_SUCCESS", // <--- THE OUTCOME
+        outcome: "PAYMENT_COMPLETE_SUCCESS",
         parameters: { "rule": "txn-report", "mode": "sync" },
-        payload: [{label: "RULE", size: 192, data: {rule: "pass"}}]
+        payload: [{label: "RULE", size: 192, data: {rule: "pass"}}],
+        headerDelta: {"abc": "xyz", "idk": "wdym"}
       },
-      // Example: Anomaly
       { 
         step: 10, timestamp: "2025-12-03T16:38:34.300Z", state: "MAN_WAKEUP", 
         stepName: "Manual Retry Trigger", serviceName: "ops-console",
         outcome: "DEADLINE_PASSED"
       },
-      // Example: Failure with Outcome
       { 
         step: 35, timestamp: "2025-12-03T16:38:34.436Z", state: "FAILED", 
         stepName: "Gateway Handshake", serviceName: "gateway",
