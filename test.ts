@@ -1,53 +1,62 @@
-import { RestClient } from '@/scripts/rest/RestClient';
-import type { PaymentFlowDto } from '@/scripts/type/payment/PaymentFlowDto';
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import { paymentFlowClient } from '@/scripts/rest/PaymentFlowClient';
+import type { PaymentStepDto } from '@/scripts/type/payment/PaymentFlowDto';
 
-class PaymentFlowClient {
-  private restClient: RestClient;
+export const usePaymentFlowStore = defineStore('payment-flow', () => {
+  
+  // -- State --
+  const loading = ref<boolean>(false);
+  const error = ref<string | null>(null);
+  const transactionId = ref<string>('');
+  const rawSteps = ref<PaymentStepDto[]>([]);
 
-  constructor(restClient: RestClient) {
-    this.restClient = restClient;
-  }
-
-  // Simulating the API call
-  // In real implementation, remove the mock data return and uncomment the API call
-  async getFlow(transactionId: string): Promise<PaymentFlowDto> {
+  // -- Getters (Computed) --
+  
+  // 1. Calculate Duration
+  const totalDuration = computed(() => {
+    const validSteps = rawSteps.value.filter(s => s.timestamp);
+    if (validSteps.length < 2) return '0ms';
     
-    // --- REAL INTEGRATION ---
-    // return await this.restClient.api
-    //   .get<PaymentFlowDto>(this.restClient.getBaseUrl() + `/payment-flow/${transactionId}`)
-    //   .json<PaymentFlowDto>();
+    const start = new Date(validSteps[0].timestamp!).getTime();
+    const end = new Date(validSteps[validSteps.length - 1].timestamp!).getTime();
+    return `${end - start}ms`;
+  });
 
-    // --- MOCK RETURN (For dev until API is ready) ---
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve({
-                transactionId: transactionId,
-                steps: [
-                    { 
-                        step: 0, timestamp: "2025-12-03T16:38:34.173Z", state: "RECEIVED", 
-                        stepName: "pol-sms-sync-async-gateway", serviceName: "gateway", 
-                        payload: [{label: "INIT", size: 1200, data: {body: "init"}}] 
-                    },
-                    { 
-                        step: 2, timestamp: "2025-12-03T16:38:34.195Z", state: "SUCCESS", 
-                        stepName: "pol-sms-initiator-service", serviceName: "initiator",
-                        outcome: "PAYMENT_COMPLETE_SUCCESS",
-                        parameters: { "rule": "txn-report", "mode": "sync" },
-                        payload: [{label: "RULE", size: 192, data: {rule: "pass"}}]
-                    },
-                    { 
-                        step: 35, timestamp: "2025-12-03T16:38:34.436Z", state: "FAILED", 
-                        stepName: "Gateway Handshake", serviceName: "gateway",
-                        outcome: "CALL_WATCHDOG_FAILED",
-                        error: { message: "Error 504: The upstream payment gateway timed out." },
-                        payload: [{ label: "GATEWAY_ERR", size: 45, data: { code: "TIMEOUT" } }] 
-                    }
-                ]
-            });
-        }, 500);
-    });
+  // 2. Get Last Status
+  const lastStatus = computed(() => {
+    if (!rawSteps.value.length) return 'UNKNOWN';
+    return rawSteps.value[rawSteps.value.length - 1].state;
+  });
+
+  // -- Actions --
+  
+  async function loadTransaction(id: string): Promise<void> {
+    loading.value = true;
+    error.value = null;
+    
+    try {
+      const data = await paymentFlowClient.getFlow(id);
+      transactionId.value = data.transactionId;
+      rawSteps.value = data.steps;
+    } catch (err: any) {
+      console.error(err);
+      error.value = err.message || 'Failed to load payment flow';
+    } finally {
+      loading.value = false;
+    }
   }
-}
 
-// Export singleton instance
-export const paymentFlowClient = new PaymentFlowClient(new RestClient(['payment']));
+  return {
+    // State
+    loading,
+    error,
+    transactionId,
+    rawSteps,
+    // Getters
+    totalDuration,
+    lastStatus,
+    // Actions
+    loadTransaction
+  };
+});
