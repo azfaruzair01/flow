@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payment Flow V16 (Vertical Layout)</title>
+  <title>Payment Flow V18 (Material Ghost)</title>
   
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -26,6 +26,23 @@
     ::-webkit-scrollbar-track { background: #1e1e1e; }
     ::-webkit-scrollbar-thumb { background: #555; }
     body { background-color: #1e1e1e; color: #e5e7eb; }
+    
+    /* Mocking the icon class behavior for PlayCode preview purposes only */
+    /* In your project, the plugin handles this. Here, I'll use a placeholder */
+    [class^="icon-"] {
+      display: inline-block;
+      width: 1.2em;
+      height: 1.2em;
+      background-color: currentColor;
+      mask-size: contain;
+      mask-position: center;
+      mask-repeat: no-repeat;
+      vertical-align: text-bottom;
+    }
+    /* SVG Data URIs for the preview (Your project won't need this CSS) */
+    .icon-\[material-symbols--data-object-outline\] { mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2 20h20v-4h-2v2H4V6h16v2h2V4H2v16zm10-7.5c-1.1 0-2-.9-2-2s.9-2 2-2s2 .9 2 2s-.9 2-2 2z"/></svg>'); }
+    .icon-\[material-symbols--label-outline\] { mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16zM16 17H5V7h11l3.55 5L16 17z"/></svg>'); }
+    .icon-\[material-symbols--tune\] { mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>'); }
   </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden font-sans antialiased text-sm">
@@ -68,37 +85,48 @@
 
         <div class="relative last:after:hidden after:absolute after:top-2 after:bottom-0 after:start-[6px] after:w-px after:bg-gray-700">
           <div class="relative z-10 flex justify-center items-center">
-            <div class="w-3 h-3 rounded-full border-2 box-border" :class="getDotClass(step.state)"></div>
+            <div class="w-3 h-3 rounded-full border-2 box-border cursor-help" 
+                 :class="getDotClass(step.state)" 
+                 :title="step.state">
+            </div>
           </div>
         </div>
 
         <div class="grow pb-8 pt-0.5">
           
-          <div class="flex flex-col gap-1 mb-2">
-            
+          <div class="flex items-center gap-3">
             <h3 class="text-sm font-bold text-gray-100 leading-none">
               {{ step.stepName }}
             </h3>
-
-            <div v-if="step.state" class="font-mono text-[10px] uppercase tracking-wider flex items-center gap-2">
-              
-              <span :class="getStateColor(step.state)" class="font-bold">
-                {{ step.state }}
-              </span>
-
-              <span v-if="step.outcome" class="flex items-center gap-2 text-gray-500">
-                <span class="w-px h-3 bg-gray-600"></span>
-                <span class="text-gray-400">{{ step.outcome }}</span>
-              </span>
-
-            </div>
-
+            
+            <span v-if="step.outcome" class="text-xs text-gray-500 font-mono">
+              — {{ step.outcome }}
+            </span>
           </div>
 
-          <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs">
-            <button v-if="step.payload && step.payload.length" @click="openDrawer(step, 'Payload')" class="text-blue-400 hover:text-blue-300 hover:underline inline-flex items-center gap-1 transition-colors"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{{ step.payload.length }} Payloads</button>
-            <button v-if="getHeaderCount(step) > 0" @click="openDrawer(step, 'Headers')" class="text-purple-400 hover:text-purple-300 hover:underline inline-flex items-center gap-1 transition-colors"><span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>+{{ getHeaderCount(step) }} Headers</button>
-            <button v-if="step.parameters && Object.keys(step.parameters).length > 0" @click="openDrawer(step, 'Parameters')" class="text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1 transition-colors"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>{{ Object.keys(step.parameters).length }} Params</button>
+          <div class="mt-1.5 flex flex-wrap gap-x-4 text-xs">
+            
+            <button v-if="step.payload && step.payload.length" 
+              @click="openDrawer(step, 'Payload')"
+              class="group flex items-center gap-1.5 px-1.5 py-1 rounded text-blue-400 hover:bg-[#252525] hover:text-blue-300 transition-colors">
+              <span class="icon-[material-symbols--data-object-outline]"></span>
+              <span class="font-medium">{{ step.payload.length }} Payloads</span>
+            </button>
+
+            <button v-if="getHeaderCount(step) > 0"
+              @click="openDrawer(step, 'Headers')"
+              class="group flex items-center gap-1.5 px-1.5 py-1 rounded text-purple-400 hover:bg-[#252525] hover:text-purple-300 transition-colors">
+              <span class="icon-[material-symbols--label-outline]"></span>
+              <span class="font-medium">+{{ getHeaderCount(step) }} Headers</span>
+            </button>
+
+            <button v-if="step.parameters && Object.keys(step.parameters).length > 0"
+              @click="openDrawer(step, 'Parameters')"
+              class="group flex items-center gap-1.5 px-1.5 py-1 rounded text-amber-400 hover:bg-[#252525] hover:text-amber-300 transition-colors">
+              <span class="icon-[material-symbols--tune]"></span>
+              <span class="font-medium">{{ Object.keys(step.parameters).length }} Params</span>
+            </button>
+
           </div>
 
           <div v-if="step.error" class="mt-3">
@@ -124,9 +152,11 @@
         </div>
         <button @click="closeDrawer" class="text-gray-400 hover:text-white p-1 hover:bg-gray-700 rounded">✕</button>
       </div>
+      
       <div class="flex border-b border-hsbc-border bg-hsbc-panel px-6 pt-1 overflow-x-auto">
         <button v-for="tab in ['Payload', 'Headers', 'Parameters', 'Metadata']" :key="tab" @click="currentTab = tab" class="pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors rounded-none outline-none focus:outline-none whitespace-nowrap" :class="currentTab === tab ? 'border-hsbc-red text-white' : 'border-transparent text-gray-500 hover:text-gray-300'">{{ tab }}</button>
       </div>
+
       <div class="flex-1 overflow-y-auto p-0 bg-hsbc-dark">
         <div v-if="currentTab === 'Payload'" class="p-6 space-y-8">
           <div v-if="selectedStep?.payload?.length">
@@ -190,13 +220,7 @@
         stepName: "pol-sms-initiator-service", serviceName: "initiator",
         outcome: "PAYMENT_COMPLETE_SUCCESS",
         parameters: { "rule": "txn-report", "mode": "sync" },
-        payload: [{label: "RULE", size: 192, data: {rule: "pass"}}],
-        headerDelta: {"abc": "xyz", "idk": "wdym"}
-      },
-      { 
-        step: 10, timestamp: "2025-12-03T16:38:34.300Z", state: "MAN_WAKEUP", 
-        stepName: "Manual Retry Trigger", serviceName: "ops-console",
-        outcome: "DEADLINE_PASSED"
+        payload: [{label: "RULE", size: 192, data: {rule: "pass"}}]
       },
       { 
         step: 35, timestamp: "2025-12-03T16:38:34.436Z", state: "FAILED", 
@@ -225,7 +249,6 @@
         }
       }
 
-      // --- COLOR LOGIC (4 Buckets) ---
       const successStates = ['SUCCESS', 'PAYMENT_COMPLETE_SUCCESS'];
       const failStates = ['FAILED', 'PAYMENT_COMPLETE_FAILED', 'CALL_FAILED', 'CALL_WATCHDOG_FAILED'];
       const warnStates = ['DEADLINE_PASSED', 'MAN_WAKEUP'];
@@ -234,14 +257,14 @@
         if(successStates.includes(state)) return 'text-green-500';
         if(failStates.includes(state)) return 'text-hsbc-red';
         if(warnStates.includes(state)) return 'text-amber-500';
-        return 'text-blue-400';
+        return 'text-gray-400';
       }
 
       function getDotClass(state) {
         if(successStates.includes(state)) return 'bg-green-500 border-green-500';
         if(failStates.includes(state)) return 'bg-hsbc-red border-hsbc-red';
         if(warnStates.includes(state)) return 'bg-amber-500 border-amber-500';
-        return 'bg-blue-500 border-blue-500';
+        return 'bg-gray-500 border-gray-500'; // Default is Grey (V17 Logic)
       }
 
       const statusColorText = computed(() => {
