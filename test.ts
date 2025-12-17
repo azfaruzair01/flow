@@ -1,53 +1,70 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import { paymentFlowClient } from '@/scripts/rest/PaymentFlowClient';
-import type { PaymentStepDto } from '@/scripts/type/payment/PaymentFlowDto';
+<script setup lang="ts">
+import { ref, onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import { usePaymentFlowStore } from '@/scripts/store/PaymentFlowStore';
+import TimelineItem from '@/components/payment/TimelineItem.vue';
+import TimelineDrawer from '@/components/payment/TimelineDrawer.vue';
 
-export const usePaymentFlowStore = defineStore('payment-flow', () => {
-  
-  const loading = ref<boolean>(false);
-  const error = ref<string | null>(null);
-  const transactionId = ref<string>('');
-  const rawSteps = ref<PaymentStepDto[]>([]);
+const route = useRoute();
+const store = usePaymentFlowStore();
 
-  // Duration Logic
-  const totalDuration = computed(() => {
-    const validSteps = rawSteps.value.filter(s => s.timestamp);
-    if (validSteps.length < 2) return '0ms';
-    const start = new Date(validSteps[0].timestamp!).getTime();
-    const end = new Date(validSteps[validSteps.length - 1].timestamp!).getTime();
-    return `${end - start}ms`;
-  });
+const isDrawerOpen = ref(false);
+const selectedStep = ref(null);
+const initialTab = ref('Payload');
 
-  // Last Status Text
-  const lastStatus = computed(() => {
-    if (!rawSteps.value.length) return 'UNKNOWN';
-    return rawSteps.value[rawSteps.value.length - 1].state;
-  });
+function handleOpenDrawer(step: any, tab: string) {
+  selectedStep.value = step;
+  initialTab.value = tab;
+  isDrawerOpen.value = true;
+}
 
-  // Last Status Color (Shared Logic for Header)
-  const lastStatusColor = computed(() => {
-    const s = lastStatus.value;
-    if (['SUCCESS', 'PAYMENT_COMPLETE_SUCCESS'].includes(s)) return 'text-green-600 dark:text-green-400';
-    if (['FAILED', 'PAYMENT_COMPLETE_FAILED', 'CALL_WATCHDOG_FAILED'].includes(s)) return 'text-hsbc-red dark:text-red-400';
-    if (['DEADLINE_PASSED', 'MAN_WAKEUP'].includes(s)) return 'text-amber-600 dark:text-amber-400';
-    return 'text-blue-600 dark:text-blue-400'; // Header keeps Blue for "In Progress/Received"
-  });
+// Robust loading logic
+const loadData = () => {
+  const id = route.params.id as string;
+  if(id) store.loadTransaction(id);
+};
 
-  async function loadTransaction(id: string) {
-    if(!id) return;
-    loading.value = true;
-    error.value = null;
-    try {
-      const data = await paymentFlowClient.getPaymentFlow(id);
-      transactionId.value = data.transactionId;
-      rawSteps.value = data.steps;
-    } catch (err: any) {
-      error.value = err.message || 'Failed to load';
-    } finally {
-      loading.value = false;
-    }
-  }
+onMounted(loadData);
+watch(() => route.params.id, loadData);
+</script>
 
-  return { loading, error, transactionId, rawSteps, totalDuration, lastStatus, lastStatusColor, loadTransaction };
-});
+<template>
+  <div class="h-full flex flex-col bg-white dark:bg-[#1e1e1e] text-gray-900 dark:text-gray-200">
+    
+    <header class="bg-gray-50 dark:bg-[#2d2d2d] border-b border-gray-200 dark:border-[#404040] px-6 py-3 shrink-0 z-20 shadow-md">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-4">
+          <h1 class="text-lg font-bold tracking-tight">{{ store.transactionId || 'Loading...' }}</h1>
+          <span class="font-bold uppercase tracking-wider text-xs" :class="store.lastStatusColor">
+            {{ store.lastStatus }}
+          </span>
+        </div>
+        <div class="flex gap-8 text-right text-xs">
+           <div><span class="text-gray-500 font-semibold uppercase">Duration</span> <span class="font-mono block">{{ store.totalDuration }}</span></div>
+           <div><span class="text-gray-500 font-semibold uppercase">Steps</span> <span class="font-mono block">{{ store.rawSteps.length }}</span></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-8">
+      <div v-if="store.loading" class="text-center text-gray-500 mt-10">Loading...</div>
+      <div v-else-if="store.error" class="text-center text-red-500 mt-10">{{ store.error }}</div>
+      
+      <div v-else class="max-w-6xl mx-auto">
+        <TimelineItem 
+          v-for="(step, index) in store.rawSteps" 
+          :key="index" 
+          :step="step"
+          @openDrawer="handleOpenDrawer"
+        />
+      </div>
+    </main>
+
+    <TimelineDrawer 
+      :is-open="isDrawerOpen" 
+      :step="selectedStep" 
+      :initial-tab="initialTab"
+      @close="isDrawerOpen = false"
+    />
+  </div>
+</template>
