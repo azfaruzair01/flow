@@ -1,1 +1,284 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Flow V9 (V6 + Clickable Params)</title>
+  
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            hsbc: { red: '#db0011', dark: '#1e1e1e', panel: '#2d2d2d', border: '#404040' }
+          },
+          fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Menlo', 'Consolas', 'monospace'] }
+        }
+      }
+    }
+  </script>
 
+  <style>
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #1e1e1e; }
+    ::-webkit-scrollbar-thumb { background: #555; }
+    body { background-color: #1e1e1e; color: #e5e7eb; }
+  </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden font-sans antialiased text-sm">
+
+<div id="app" class="flex flex-col h-full">
+
+  <header class="bg-hsbc-panel border-b border-hsbc-border px-6 py-3 shrink-0 z-20 shadow-md">
+    <div class="flex justify-between items-center">
+      <div class="flex items-center gap-4">
+        <div>
+          <div class="flex items-center gap-3">
+            <h1 class="text-lg font-bold text-white tracking-tight">{{ store.transactionId }}</h1>
+            <span class="font-bold uppercase tracking-wider text-xs" :class="statusColorText">
+              {{ store.lastStatus }}
+            </span>
+          </div>
+          <div class="text-gray-400 text-xs mt-0.5 font-mono">
+            Started: {{ formatDateTime(store.rawSteps[0]?.timestamp) }}
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-8 text-right">
+        <div><div class="text-[10px] uppercase text-gray-500 font-semibold">Duration</div><div class="font-mono text-base font-medium text-white">{{ store.totalDuration }}</div></div>
+        <div><div class="text-[10px] uppercase text-gray-500 font-semibold">Steps</div><div class="font-mono text-base font-medium text-white">{{ store.rawSteps.length }}</div></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 overflow-y-auto p-8 relative">
+    <div class="max-w-5xl mx-auto">
+      
+      <div v-for="(step, index) in store.rawSteps" :key="index" class="flex gap-x-4 group">
+        
+        <div class="w-24 text-end pt-0.5 flex flex-col items-end">
+          <span class="text-xs text-gray-500 font-mono leading-none" v-if="step.timestamp">
+            {{ extractTime(step.timestamp) }}
+          </span>
+          <span class="h-4" v-else></span>
+        </div>
+
+        <div class="relative last:after:hidden after:absolute after:top-2 after:bottom-0 after:start-[6px] after:w-px after:bg-gray-700">
+          <div class="relative z-10 flex justify-center items-center">
+            <div class="w-3 h-3 rounded-full border-2 box-border" 
+                 :class="getDotClass(step.state)">
+            </div>
+          </div>
+        </div>
+
+        <div class="grow pb-8 pt-0.5">
+          
+          <div class="flex items-center">
+            <h3 class="text-sm font-bold text-gray-100 leading-none">
+              {{ step.stepName }}
+            </h3>
+          </div>
+
+          <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+            
+            <button v-if="step.payload && step.payload.length" 
+              @click="openDrawer(step, 'Payload')"
+              class="text-blue-400 hover:text-blue-300 hover:underline inline-flex items-center gap-1 transition-colors">
+              <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+              {{ step.payload.length }} Payloads
+            </button>
+
+            <button v-if="getHeaderCount(step) > 0"
+              @click="openDrawer(step, 'Headers')"
+              class="text-purple-400 hover:text-purple-300 hover:underline inline-flex items-center gap-1 transition-colors">
+              <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+              +{{ getHeaderCount(step) }} Headers
+            </button>
+
+            <button v-if="step.parameters"
+              @click="openDrawer(step, 'Parameters')"
+              class="text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1 transition-colors">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+              {{ Object.keys(step.parameters).length }} Params
+            </button>
+
+          </div>
+
+          <div v-if="step.error" class="mt-3">
+            <div class="inline-block px-3 py-2 bg-red-950/40 border-l-2 border-hsbc-red text-xs text-red-200 font-mono rounded-r-sm">
+              <span class="font-bold text-red-400 block mb-1">Error:</span>
+              {{ step.error.message }}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div v-if="isDrawerOpen" class="fixed inset-0 z-50 flex justify-end">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-[1px]" @click="closeDrawer"></div>
+
+    <div class="relative w-[700px] h-full bg-hsbc-panel border-l border-hsbc-border shadow-2xl flex flex-col rounded-none transform transition-transform">
+      <div class="px-6 py-5 border-b border-hsbc-border bg-[#252525] flex justify-between items-start">
+        <div>
+          <h2 class="text-lg font-bold text-white">{{ selectedStep?.stepName }}</h2>
+          <div class="text-xs text-gray-500 font-mono mt-1">ID: {{ selectedStep?.serviceName }}</div>
+        </div>
+        <button @click="closeDrawer" class="text-gray-400 hover:text-white p-1 hover:bg-gray-700 rounded">✕</button>
+      </div>
+
+      <div class="flex border-b border-hsbc-border bg-hsbc-panel px-6 pt-1 overflow-x-auto">
+        <button 
+          v-for="tab in ['Payload', 'Headers', 'Parameters', 'Metadata']" :key="tab"
+          @click="currentTab = tab"
+          class="pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors rounded-none outline-none focus:outline-none whitespace-nowrap"
+          :class="currentTab === tab ? 'border-hsbc-red text-white' : 'border-transparent text-gray-500 hover:text-gray-300'">
+          {{ tab }}
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-0 bg-hsbc-dark">
+        
+        <div v-if="currentTab === 'Payload'" class="p-6 space-y-8">
+          <div v-if="selectedStep?.payload?.length">
+            <div v-for="(p, idx) in selectedStep.payload" :key="idx">
+              <div class="flex justify-between items-center mb-2 pl-2 border-l-2 border-blue-500">
+                <span class="text-xs font-bold text-blue-400 uppercase">{{ p.label }}</span>
+                <span class="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded">{{ p.size }} bytes</span>
+              </div>
+              <div class="bg-[#111] p-4 border border-hsbc-border text-xs font-mono text-gray-300 overflow-x-auto">
+                <pre v-if="p.data"><code>{{ JSON.stringify(p.data, null, 2) }}</code></pre>
+                <div v-else class="text-gray-500 italic">// Metadata only (No Body)
+{{ JSON.stringify(p.metadata, null, 2) }}</div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="flex flex-col items-center justify-center h-64 text-gray-500"><span>No Payloads</span></div>
+        </div>
+
+        <div v-if="currentTab === 'Headers'" class="p-6">
+          <div v-if="selectedStep?.headerDelta">
+             <div class="text-xs font-bold text-purple-400 mb-2 uppercase tracking-wider">Header Delta</div>
+             <div class="bg-[#111] p-4 border border-hsbc-border text-xs font-mono text-gray-300 overflow-x-auto">
+               <pre><code>{{ JSON.stringify(selectedStep.headerDelta, null, 2) }}</code></pre>
+             </div>
+          </div>
+          <div v-else class="flex flex-col items-center justify-center h-64 text-gray-500"><span>No Header Changes</span></div>
+        </div>
+
+        <div v-if="currentTab === 'Parameters'" class="p-6">
+          <div v-if="selectedStep?.parameters">
+             <div class="grid grid-cols-1 gap-px bg-hsbc-border border border-hsbc-border">
+                <div v-for="(val, key) in selectedStep.parameters" :key="key" class="grid grid-cols-3 bg-[#1a1a1a]">
+                   <div class="col-span-1 p-3 text-gray-500 text-xs font-bold border-r border-hsbc-border flex items-center bg-[#202020]">{{ key }}</div>
+                   <div class="col-span-2 p-3 text-gray-300 text-xs font-mono break-all">{{ val }}</div>
+                </div>
+             </div>
+          </div>
+          <div v-else class="flex flex-col items-center justify-center h-64 text-gray-500"><span>No Parameters</span></div>
+        </div>
+
+        <div v-if="currentTab === 'Metadata'" class="p-6">
+          <table class="w-full text-left text-xs border-collapse">
+            <tbody>
+              <tr class="border-b border-hsbc-border"><td class="py-3 text-gray-500 font-bold uppercase w-32">Status</td><td class="py-3 font-mono text-white">{{ selectedStep?.state }}</td></tr>
+              <tr class="border-b border-hsbc-border"><td class="py-3 text-gray-500 font-bold uppercase">Block Tags</td><td class="py-3 font-mono text-white">{{ selectedStep?.blockTags?.join(', ') || '-' }}</td></tr>
+              <tr class="border-b border-hsbc-border"><td class="py-3 text-gray-500 font-bold uppercase align-top pt-3">Sequence</td><td class="py-3 font-mono text-gray-400 break-all leading-relaxed">{{ selectedStep?.sequence }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+  // --- MOCK DATA ---
+  const rawData = {
+    "transactionId": "542196fe-1f62-4ec8-a6b7-78043fc6bc3b",
+    "steps": [
+      { 
+        step: 0, timestamp: "2025-12-03T16:38:34.173Z", state: "RECEIVED", 
+        stepName: "pol-sms-sync-async-gateway", serviceName: "gateway", 
+        blockTags: ["CONTINUE"],
+        headerDelta: { "x-request-id": "req-123" },
+        payload: [{label: "INIT", size: 1200, data: {body: "init"}}] 
+      },
+      { step: 1, state: "SUCCESS", stepName: "pol-sms-initiator-service-mesh", serviceName: "initiator", step: 1 },
+      { 
+        step: 2, timestamp: "2025-12-03T16:38:34.195Z", state: "SUCCESS", 
+        stepName: "pol-sms-initiator-service", serviceName: "initiator", 
+        // 6 Parameters
+        parameters: { "rule": "txn-report", "mode": "sync", "shard": "us-east-1", "retry": "0", "vip": "true", "trace": "on" },
+        payload: [{label: "RULE", size: 192, data: {rule: "pass"}}],
+        headerDelta: { "new-header": "true" }
+      },
+      { 
+        step: 35, timestamp: "2025-12-03T16:38:34.436Z", state: "FAILED", 
+        stepName: "Gateway Handshake", serviceName: "gateway",
+        error: { message: "Error 504: The upstream payment gateway timed out." },
+        payload: [{ label: "GATEWAY_ERR", size: 45, data: { code: "TIMEOUT" } }] 
+      },
+      { step: 36, state: "SKIPPED", stepName: "Error Mapping", serviceName: "gateway" }
+    ]
+  };
+
+  createApp({
+    setup() {
+      const store = reactive({ transactionId: rawData.transactionId, rawSteps: [], totalDuration: '0ms' });
+      const selectedStep = ref(null);
+      const isDrawerOpen = ref(false);
+      const currentTab = ref('Payload');
+
+      function processData() {
+        store.rawSteps = rawData.steps;
+        const valid = store.rawSteps.filter(s => s.timestamp);
+        if(valid.length > 1) {
+           const start = new Date(valid[0].timestamp).getTime();
+           const end = new Date(valid[valid.length-1].timestamp).getTime();
+           store.totalDuration = `${end - start}ms`;
+        }
+      }
+
+      const statusColorText = computed(() => {
+        const last = store.rawSteps[store.rawSteps.length - 1]?.state;
+        if(['SUCCESS', 'PAYMENT_COMPLETE_SUCCESS'].includes(last)) return 'text-green-500';
+        if(['FAILED', 'PAYMENT_COMPLETE_FAILED'].includes(last)) return 'text-red-500';
+        return 'text-blue-400';
+      });
+
+      function openDrawer(step, tab = 'Payload') { selectedStep.value = step; currentTab.value = tab; isDrawerOpen.value = true; }
+      function closeDrawer() { isDrawerOpen.value = false; }
+      
+      function extractTime(iso) { return new Date(iso).toLocaleTimeString([], { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit' }) + '.' + new Date(iso).getMilliseconds(); }
+      function formatDateTime(iso) { if(!iso) return ''; return new Date(iso).toLocaleString(); }
+
+      function getDotClass(state) {
+        if(['SUCCESS', 'PAYMENT_COMPLETE_SUCCESS'].includes(state)) return 'bg-green-500 border-green-500';
+        if(['FAILED', 'PAYMENT_COMPLETE_FAILED'].includes(state)) return 'bg-hsbc-red border-hsbc-red';
+        if(state === 'RECEIVED') return 'bg-blue-500 border-blue-500'; 
+        return 'bg-gray-600 border-gray-600';
+      }
+
+      function getHeaderCount(step) {
+        return step.headerDelta ? Object.keys(step.headerDelta).length : 0;
+      }
+
+      onMounted(() => processData());
+
+      return { store, selectedStep, isDrawerOpen, currentTab, statusColorText, openDrawer, closeDrawer, extractTime, formatDateTime, getDotClass, getHeaderCount };
+    }
+  }).mount('#app');
+</script>
+
+</body>
+</html>
